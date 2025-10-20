@@ -1,15 +1,282 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
-generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
-}
+// prisma/schema.prisma
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id            String  @id @default(cuid())
+  name          String?
+  address       String?
+  vatNumber     String?
+  bankName      String?
+  accountNumber String?
+  branchCode    String?
+
+  users        User[]
+  customers    Customer[]
+  vehicles     Vehicle[]
+  serviceItems ServiceItem[]
+  quotes       Quote[]
+  jobCards     JobCard[]
+  invoices     Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String?   @unique
+  hashedPassword String?
+  role           UserRole  @default(MECHANIC)
+  isActive       Boolean   @default(true)
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id           String @id @default(cuid())
+  firstName    String
+  lastName     String?
+  email        String?
+  phoneNumber  String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  postalCode   String?
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  vehicles     Vehicle[]
+  quotes       Quote[]
+  jobCards     JobCard[]
+  invoices     Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model VehicleMake {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  models    VehicleModel[]
+  vehicles  Vehicle[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model VehicleModel {
+  id        String      @id @default(cuid())
+  name      String
+  makeId    String
+  make      VehicleMake @relation(fields: [makeId], references: [id])
+  vehicles  Vehicle[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([name, makeId])
+  @@index([makeId])
+}
+
+model Vehicle {
+  id                 String  @id @default(cuid())
+  registrationNumber String @unique
+  vin                String? @unique
+  color              String?
+  year               Int?
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  makeId         String
+  make           VehicleMake @relation(fields: [makeId], references: [id])
+  modelId        String
+  model          VehicleModel @relation(fields: [modelId], references: [id])
+  quotes         Quote[]
+  jobCards       JobCard[]
+  invoices       Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([makeId])
+  @@index([modelId])
+}
+
+model ServiceItem {
+  id           String  @id @default(cuid())
+  description  String
+  defaultPrice Float?
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  lineItems    LineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model Quote {
+  id                 String @id @default(cuid())
+  quoteNumber        String @unique
+  status             QuoteStatus @default(DRAFT)
+  clientInstructions String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id])
+  lineItems      LineItem[]
+  jobCard        JobCard?
+
+  subTotal   Float     @default(0)
+  vatAmount  Float     @default(0)
+  total      Float     @default(0)
+
+  sentAt     DateTime?
+  acceptedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model JobCard {
+  id              String        @id @default(cuid())
+  jobCardNumber   String        @unique
+  status          JobCardStatus @default(PENDING)
+  odometerReading Int?
+  mechanicNotes   String?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id])
+  lineItems      LineItem[]
+  quoteId        String?      @unique
+  quote          Quote?       @relation(fields: [quoteId], references: [id])
+  invoice        Invoice?
+
+  subTotal  Float @default(0)
+  vatAmount Float @default(0)
+  total     Float @default(0)
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  status        InvoiceStatus @default(DRAFT)
+  invoiceDate   DateTime      @default(now())
+  dueDate       DateTime?
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id])
+  lineItems      LineItem[]
+  jobCardId      String?      @unique
+  jobCard        JobCard?     @relation(fields: [jobCardId], references: [id])
+
+  subTotal  Float @default(0)
+  vatAmount Float @default(0)
+  total     Float @default(0)
+
+  isImmutable Boolean   @default(false)
+  sentAt      DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([status])
+}
+
+model LineItem {
+  id          String  @id @default(cuid())
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Float
+  total       Float
+
+  serviceItemId String?
+  serviceItem   ServiceItem? @relation(fields: [serviceItemId], references: [id])
+
+  quoteId   String?
+  quote     Quote?  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  jobCardId String?
+  jobCard   JobCard? @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([serviceItemId])
+  @@index([quoteId])
+  @@index([jobCardId])
+  @@index([invoiceId])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MECHANIC
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+}
+
+enum JobCardStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  VOID
 }
